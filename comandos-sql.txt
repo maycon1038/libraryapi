@@ -1,0 +1,61 @@
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+CREATE TABLE usuario (
+    id uuid NOT NULL PRIMARY KEY,
+    login varchar(20) NOT NULL UNIQUE,
+    senha varchar(300) NOT NULL,
+    email varchar(150) NOT NULL,
+    roles varchar[]
+);
+
+CREATE TABLE autor (
+    id uuid NOT NULL PRIMARY KEY,
+    nome varchar(100) NOT NULL,
+    data_nascimento date NOT NULL,
+    nacionalidade varchar(50) NOT NULL,
+    data_cadastro timestamp,
+    data_atualizacao timestamp,
+    id_usuario uuid REFERENCES usuario(id)
+);
+
+CREATE TABLE livro (
+    id uuid NOT NULL PRIMARY KEY,
+    isbn varchar(20) NOT NULL UNIQUE,
+    titulo varchar(150) NOT NULL,
+    data_publicacao date,
+    genero varchar(30) NOT NULL,
+    preco numeric(18,2),
+    data_cadastro timestamp,
+    data_atualizacao timestamp,
+    id_usuario uuid REFERENCES usuario(id),
+    id_autor uuid NOT NULL REFERENCES autor(id),
+    CONSTRAINT chk_genero CHECK (
+        genero IN ('FICCAO', 'FANTASIA', 'MISTERIO', 'ROMANCE', 'BIOGRAFIA', 'CIENCIA')
+    )
+);
+
+CREATE TABLE client (
+    id uuid NOT NULL PRIMARY KEY,
+    client_id varchar(150) NOT NULL,
+    client_secret varchar(400) NOT NULL,
+    redirect_uri varchar(200) NOT NULL,
+    scope varchar(50)
+);
+
+INSERT INTO usuario (id, login, senha, email, roles)
+VALUES (
+    uuid_generate_v4(),
+    'gerente',
+    '$2a$12$u./yCEmhTdXjlyvV80sQKOfmO1Ab9HfI7HrOu6dzNa9hkdB5p9A6u',
+    'gerente@email.com',
+    '{GERENTE}'
+);
+
+INSERT INTO client (id, client_id, client_secret, redirect_uri, scope)
+VALUES (
+    uuid_generate_v4(),
+    'client-production',
+    '$2a$12$rQP5KtueNXW4oahOUBYQF.ax/GSucZlPr/ohMeC9ur747lEEnQIYu',
+    'http://localhost:8080/authorized',
+    'GERENTE'
+);
