@@ -154,19 +154,43 @@ grant_type=client_credentials
 scope=GERENTE
 ```
 
+Para testar localmente, o cliente `client-local` usa a senha `senha123`:
+
+```text
+Client ID: client-local
+Client Secret: senha123
+```
+
+No PowerShell, obtenha o token com:
+
+```powershell
+curl.exe --location --request POST "http://localhost:8080/oauth2/token" `
+  --header "Content-Type: application/x-www-form-urlencoded" `
+  --user "client-local:senha123" `
+  --data-urlencode "grant_type=client_credentials" `
+  --data-urlencode "scope=GERENTE"
+```
+
+O parâmetro `--user` envia automaticamente a autenticação Basic. O cliente `client-local` precisa existir na tabela `client`; se necessário, cadastre-o com:
+
+```powershell
+$hash = '$2a$10$dpOYlSn9Lu1rh6WDhUIhiOiFDfnHiL79TFmyYmMgHFvebI4HpUSkC'
+docker exec librarydb psql -U postgres -d library -c "INSERT INTO client (id, client_id, client_secret, redirect_uri, scope) VALUES (uuid_generate_v4(), 'client-local', '$hash', 'http://localhost:8080/authorized', 'GERENTE');"
+```
+
 No Postman, a forma equivalente é:
 
 1. Aba **Authorization**.
 2. Type: **Basic Auth**.
-3. Username: `client-production`.
-4. Password: o segredo configurado para esse cliente.
+3. Username: `client-local`.
+4. Password: `senha123`.
 5. Aba **Body** → **x-www-form-urlencoded**.
 6. Adicione `grant_type` com valor `client_credentials`.
 7. Adicione `scope` com valor `GERENTE`.
 
 Copie o campo `access_token` da resposta para a variável `access_token`.
 
-> O segredo armazenado no banco é BCrypt e não pode ser lido de volta. Se o cliente inicial não tiver um segredo conhecido, registre um novo cliente pelo endpoint `POST /clients` após autenticar um usuário com role `GERENTE`, ou substitua o hash no script SQL por um hash BCrypt conhecido antes de inicializar o banco.
+> O segredo armazenado no banco é BCrypt e não pode ser lido de volta. O hash acima corresponde à senha `senha123`. No PowerShell, use aspas simples na variável `$hash` para impedir que os caracteres `$` do BCrypt sejam interpretados.
 
 ### 3. Cadastrar autor
 

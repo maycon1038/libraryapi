@@ -109,7 +109,7 @@ public class AuthorizationServerConfiguration {
     }
 
     @Bean
-    public AuthorizationServerSettings authorizationServerSettings(){
+    public AuthorizationServerSettings customAuthorizationServerSettings(){
         return AuthorizationServerSettings.builder()
                 // obter token
                 .tokenEndpoint("/oauth2/token")
