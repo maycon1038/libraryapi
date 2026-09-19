@@ -1,0 +1,52 @@
+services:
+  librarydb:
+    image: postgres:16.3
+    environment:
+      POSTGRES_DB: library
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - librarydb-data:/var/lib/postgresql/data
+      - ./comandos-sql.txt:/docker-entrypoint-initdb.d/01-comandos.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d library"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pgadmin4:
+    image: dpage/pgadmin4:9.18
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "15432:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      librarydb:
+        condition: service_healthy
+
+  libraryapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: libraryapi:latest
+    environment:
+      DATASOURCE_URL: jdbc:postgresql://librarydb:5432/library
+      DATASOURCE_USERNAME: postgres
+      DATASOURCE_PASSWORD: postgres
+      SPRING_PROFILES_ACTIVE: production
+      TZ: America/Sao_Paulo
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    depends_on:
+      librarydb:
+        condition: service_healthy
+
+volumes:
+  librarydb-data:
+  pgadmin-data:

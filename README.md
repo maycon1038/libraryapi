@@ -43,6 +43,232 @@ Get-Content .\comandos-sql.txt -Raw |
 
 O script cria as tabelas `usuario`, `autor`, `livro` e `client`, além dos dados iniciais.
 
+## Execução com Docker
+
+Os comandos abaixo usam PowerShell no Windows. Execute-os a partir da raiz do projeto.
+
+### 1. Criar a rede Docker
+
+```powershell
+docker network create library-network
+```
+
+Se a rede já existir, o Docker informará que ela já está criada. Nesse caso, continue para o próximo passo.
+
+### 2. Criar e iniciar o PostgreSQL
+
+```powershell
+docker run --name librarydb `
+  -e POSTGRES_PASSWORD=postgres `
+  -e POSTGRES_USER=postgres `
+  -e POSTGRES_DB=library `
+  -p 5432:5432 `
+  -d `
+  --network library-network `
+  postgres:16.3
+```
+
+Se o container já existir, inicie-o:
+
+```powershell
+docker start librarydb
+```
+
+Se o container existir, mas não estiver conectado à rede da aplicação:
+
+```powershell
+docker network connect library-network librarydb
+```
+
+Verifique o estado do banco:
+
+```powershell
+docker ps
+docker exec librarydb pg_isready -U postgres -d library
+```
+
+Inicialize as tabelas e os dados:
+
+```powershell
+Get-Content .\comandos-sql.txt -Raw |
+  docker exec -i librarydb psql -U postgres -d library -v ON_ERROR_STOP=1
+```
+
+### 3. Construir a imagem da API
+
+O `Dockerfile` compila o projeto com Maven e cria uma imagem baseada no Java 21:
+
+```powershell
+docker build -t libraryapi .
+```
+
+Listar a imagem criada:
+
+```powershell
+docker images libraryapi
+```
+
+### 4. Subir o container da API
+
+Dentro de um container, `localhost` aponta para o próprio container. Por isso, a API deve usar `librarydb` como hostname do PostgreSQL:
+
+```powershell
+docker run --name libraryapi `
+  --network library-network `
+  -e DATASOURCE_URL="jdbc:postgresql://librarydb:5432/library" `
+  -e DATASOURCE_USERNAME="postgres" `
+  -e DATASOURCE_PASSWORD="postgres" `
+  -p 8080:8080 `
+  -p 9090:9090 `
+  libraryapi
+```
+
+Em outro terminal, acompanhe os logs:
+
+```powershell
+docker logs -f libraryapi
+```
+
+A aplicação iniciou corretamente quando aparecer uma mensagem semelhante a:
+
+```text
+Started Application
+```
+
+A API ficará disponível em `http://localhost:8080` e o Actuator em `http://localhost:9090/actuator`.
+
+### 5. Comandos úteis
+
+Ver todos os containers, inclusive os parados:
+
+```powershell
+docker ps -a
+```
+
+Verificar a rede e os containers conectados:
+
+```powershell
+docker network inspect library-network
+```
+
+Parar e iniciar a API:
+
+```powershell
+docker stop libraryapi
+docker start libraryapi
+```
+
+Reiniciar a API:
+
+```powershell
+docker restart libraryapi
+```
+
+Abrir um shell no container da API:
+
+```powershell
+docker exec -it libraryapi sh
+```
+
+Remover somente o container da API para recriá-lo:
+
+```powershell
+docker rm -f libraryapi
+```
+
+Remover a imagem local:
+
+```powershell
+docker rmi libraryapi
+```
+
+> Se o nome `libraryapi` já estiver em uso, remova o container antigo com `docker rm -f libraryapi` ou use outro nome no parâmetro `--name`. Os dados do PostgreSQL permanecem no container `librarydb`.
+
+### 6. Usar Docker Compose
+
+O arquivo [`docker-compose.yml`](docker-compose.yml) sobe os três serviços do projeto:
+
+- `librarydb`: PostgreSQL na porta `5432`.
+- `pgadmin4`: pgAdmin na porta `15432`.
+- `libraryapi`: API nas portas `8080` e `9090`.
+
+O Compose cria volumes nomeados para manter os dados do PostgreSQL e do pgAdmin. O script `comandos-sql.txt` é executado automaticamente pelo PostgreSQL somente quando o volume do banco é criado pela primeira vez.
+
+Se você já tiver containers criados manualmente com `docker run`, pare-os antes de executar o Compose para liberar as portas `5432`, `8080`, `9090` e `15432`:
+
+```powershell
+docker stop libraryapi librarydb pgadmin4
+```
+
+Não remova o container antigo do PostgreSQL sem verificar onde os dados estão armazenados. O Compose usa o volume `libraryapi_librarydb-data`, que é independente do armazenamento do container criado manualmente.
+
+Subir todos os serviços em segundo plano:
+
+```powershell
+docker compose up -d
+```
+
+O comando também constrói a imagem local `libraryapi:latest` quando necessário.
+
+Verificar o estado dos serviços:
+
+```powershell
+docker compose ps
+```
+
+Acompanhar os logs da API:
+
+```powershell
+docker compose logs -f libraryapi
+```
+
+Acompanhar os logs de todos os serviços:
+
+```powershell
+docker compose logs -f
+```
+
+Parar temporariamente os serviços sem removê-los:
+
+```powershell
+docker compose stop
+```
+
+Iniciar novamente os serviços que foram parados:
+
+```powershell
+docker compose start
+```
+
+Recriar a imagem e subir os serviços após alterações no código:
+
+```powershell
+docker compose up -d --build
+```
+
+Parar e remover os containers e a rede do Compose, mantendo os volumes:
+
+```powershell
+docker compose down
+```
+
+Depois de `docker compose down`, use `docker compose up -d` para criar e iniciar os containers novamente. O comando `docker compose start` só funciona enquanto os containers ainda existem.
+
+Remover também os volumes e todos os dados persistidos do PostgreSQL e do pgAdmin:
+
+```powershell
+docker compose down -v
+```
+
+Use `docker compose down -v` somente quando quiser reinicializar o banco do zero. Nesse caso, o `comandos-sql.txt` será executado novamente no próximo `docker compose up -d`.
+
+Testar a API depois da inicialização:
+
+```powershell
+curl.exe http://localhost:8080/v3/api-docs
+curl.exe http://localhost:9090/actuator
+```
+
 ## Configuração
 
 Por padrão, a aplicação usa:
@@ -366,4 +592,13 @@ Execute a suíte de testes com:
 
 ```powershell
 .\mvnw test
+```
+
+## Para obter um token OAuth2:
+```http
+curl.exe --location --request POST "http://localhost:8080/oauth2/token" `
+  --header "Content-Type: application/x-www-form-urlencoded" `
+--header "Authorization: Basic Y2xpZW50LWxvY2FsOnNlbmhhMTIz" `
+  --data-urlencode "grant_type=client_credentials" `
+--data-urlencode "scope=GERENTE"
 ```
